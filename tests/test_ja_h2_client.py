@@ -318,6 +318,43 @@ class RotatingIPJA3H2ClientTests(unittest.TestCase):
 
         client.close()
 
+    def test_create_v2_defaults_to_auto_source_and_parallel_slots(self) -> None:
+        original_discover = ja_h2_client.discover_interface_source_ips
+
+        def fail_discover(*args, **kwargs):
+            raise AssertionError("CreateV2FanoutJA3H2Client should not discover IPs")
+
+        ja_h2_client.discover_interface_source_ips = fail_discover
+        try:
+            client = CreateV2FanoutJA3H2Client(
+                connection_factory=FakeH2Connection,
+                connections_per_source_ip=3,
+                slot_chooser=first_slot,
+            )
+            try:
+                self.assertEqual(client.available_source_ips, ["auto"])
+                self.assertEqual(len(FakeH2Connection.instances), 6)
+                self.assertTrue(
+                    all(
+                        instance.source_ip == ""
+                        for instance in FakeH2Connection.instances
+                    )
+                )
+                self.assertTrue(
+                    all(
+                        instance.family == "auto"
+                        for instance in FakeH2Connection.instances
+                    )
+                )
+                self.assertEqual(
+                    sum(not instance.closed for instance in FakeH2Connection.instances),
+                    3,
+                )
+            finally:
+                client.close()
+        finally:
+            ja_h2_client.discover_interface_source_ips = original_discover
+
     def test_create_v2_fanout_returns_200_and_discards_412(self) -> None:
         FakeH2Connection.status_by_source = {
             "192.0.2.1": 412,

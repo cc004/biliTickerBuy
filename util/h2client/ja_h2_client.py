@@ -51,6 +51,17 @@ class SourceAddress:
     interface_alias: str = ""
 
 
+_DEFAULT_SOURCE_ADDRESS = SourceAddress("", "auto", "default")
+
+
+def _default_source_ip_provider() -> list[SourceAddress]:
+    return [_DEFAULT_SOURCE_ADDRESS]
+
+
+def _source_label(source: SourceAddress) -> str:
+    return source.ip or "auto"
+
+
 @dataclass
 class ConnectionSlot:
     source: SourceAddress
@@ -349,7 +360,7 @@ class RotatingIPJA3H2Client(AbstractH2Client):
 
     @property
     def available_source_ips(self) -> list[str]:
-        return [source.ip for source in self._available_sources]
+        return [_source_label(source) for source in self._available_sources]
 
     def close(self) -> None:
         with self._lock:
@@ -492,14 +503,14 @@ class RotatingIPJA3H2Client(AbstractH2Client):
             if ok:
                 logger.debug(
                     "H2 healthcheck passed source_ip={} attempt={} status={}",
-                    source.ip,
+                    _source_label(source),
                     attempt,
                     response.status,
                 )
             else:
                 logger.warning(
                     "H2 healthcheck rejected source_ip={} attempt={} status={}",
-                    source.ip,
+                    _source_label(source),
                     attempt,
                     response.status,
                 )
@@ -507,7 +518,7 @@ class RotatingIPJA3H2Client(AbstractH2Client):
         except Exception as exc:
             logger.warning(
                 "H2 healthcheck failed source_ip={} attempt={} error={}: {}",
-                source.ip,
+                _source_label(source),
                 attempt,
                 exc.__class__.__name__,
                 exc,
@@ -524,7 +535,7 @@ class RotatingIPJA3H2Client(AbstractH2Client):
     ) -> H2Connection:
         return self._connection_factory(
             host,
-            source.ip,
+            source.ip or None,
             port=port,
             sni=host,
             family=source.family,
@@ -572,7 +583,7 @@ class RotatingIPJA3H2Client(AbstractH2Client):
             logger.warning(
                 "H2 discard connection source_ip={} host={}:{} "
                 "reason={} removed={}",
-                slot.source.ip,
+                _source_label(slot.source),
                 host,
                 port,
                 reason,
@@ -582,7 +593,7 @@ class RotatingIPJA3H2Client(AbstractH2Client):
             logger.warning(
                 "H2 discard connection source_ip={} host={}:{} "
                 "reason={} removed={} error={}: {}",
-                slot.source.ip,
+                _source_label(slot.source),
                 host,
                 port,
                 reason,
@@ -699,6 +710,17 @@ class RotatingIPJA3H2Client(AbstractH2Client):
 
 
 class CreateV2FanoutJA3H2Client(RotatingIPJA3H2Client):
+    def __init__(
+        self,
+        *,
+        source_ip_provider: SourceIPProvider | None = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(
+            source_ip_provider=source_ip_provider or _default_source_ip_provider,
+            **kwargs,
+        )
+
     def _request(
         self,
         method: str,
