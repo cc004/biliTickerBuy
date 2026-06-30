@@ -514,6 +514,34 @@ class RotatingIPJA3H2ClientTests(unittest.TestCase):
 
         client.close()
 
+    def test_create_v2_fanout_matches_percent_encoded_path(self) -> None:
+        FakeH2Connection.status_by_source = {
+            "192.0.2.1": 429,
+            "192.0.2.2": 429,
+            "192.0.2.3": 429,
+        }
+        client = CreateV2FanoutJA3H2Client(
+            source_ip_provider=lambda: [
+                SourceAddress("192.0.2.1", "ipv4", "WLAN"),
+                SourceAddress("192.0.2.2", "ipv4", "Ethernet"),
+                SourceAddress("192.0.2.3", "ipv4", "Ethernet"),
+            ],
+            connection_factory=FakeH2Connection,
+            connections_per_source_ip=1,
+            slot_chooser=first_slot,
+        )
+
+        response = client.post(
+            "https://show.bilibili.com/%2f%61pi/%74icke%74/"
+            "%6fr%64er%2f%63%72ea%74e%562?project_id=1001701",
+            json={"project_id": 1},
+        )
+
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(len(business_call_instances()), 3)
+
+        client.close()
+
 
 if __name__ == "__main__":
     unittest.main()

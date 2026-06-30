@@ -820,9 +820,10 @@ class CreateV2FanoutJA3H2Client(RotatingIPJA3H2Client):
 
     def _should_fanout_create_v2(self, url: str) -> bool:
         parsed = urllib.parse.urlsplit(url)
+        decoded_path = urllib.parse.unquote(parsed.path).lower()
         return (
             (parsed.hostname or "").lower() == self._healthcheck_host.lower()
-            and "createV2" in parsed.path
+            and "createv2" in decoded_path
         )
 
     def _send_fanout_request(
